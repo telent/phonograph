@@ -7,8 +7,8 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [cheshire.core :as json]
-            [boot.task.built-in :as task])
-  (:import [java.io BufferedInputStream]))
+            [boot.task.built-in :as task]
+            [phonograph.sha256 :as sha256] ))
 
 (core/deftask cljs
   "build clojurescript files"
@@ -34,19 +34,8 @@
           (util/info "done\n")))
       (-> fileset (core/add-resource target) core/commit!))))
 
-(defn sha256-stream [stream]
-  (let [buffer (byte-array 8192)
-        digest (java.security.MessageDigest/getInstance "SHA-256")
-        bstream (BufferedInputStream. stream)]
-    (loop []
-      (let [count (.read bstream buffer)]
-        (when (> count 0)
-          (.update digest buffer 0 count)
-          (recur))))
-    (apply str (map #(format "%02x" %)
-                    (.digest digest)))))
 
-(def sha256-file (comp sha256-stream io/input-stream))
+(def sha256-file (comp sha256/digest-stream io/input-stream))
 
 (defn path-for-artifact [artifact]
   (str
