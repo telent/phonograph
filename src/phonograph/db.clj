@@ -63,6 +63,49 @@
 ;;;;;;;;
 
 
+(defn set-file-sha256 [ds file value]
+  (let [subject (.toURI (io/file file))
+        object (URI. (str "sha256:" value))]
+    (update ds (substitute
+                (group [subject :phono:digest (? :old)])
+                (group [subject :phono:digest object])
+                (group (optional (group [])
+                                 (group [subject :phono:digest (? :old)])))))))
+
+(defn get-file-sha256 [ds name]
+  (-> (query ds
+             (group [(.toURI (io/file name)) :phono:digest (? :digest)]))
+      first
+      (get "digest")))
+
+;; we expect timestamps to be raw number of ms since 1970, because the only
+;; thing we do with them is compare against java.io.File#lastModified
+(defn get-file-scanned-timestamp [ds name]
+  (-> (query
+       ds
+       (group [(.toURI (io/file name)) :phono:lastScanned (? :lastScanned)]))
+      first
+      (get "lastScanned")))
+
+(defn set-file-scanned-timestamp [ds file value]
+  (let [subject (.toURI (io/file file))
+        op :phono:lastScanned]
+    (update ds (substitute
+                (group [subject op (? :old)])
+                (group [subject op value])
+                (group (optional (group [])
+                                 (group [subject op (? :old)])))))))
+
+(defn get-files-without-tags [ds]
+  (query
+   ds
+   (filter-solns
+    (optional (group [(? :name) :phono:digest (? :sha)])
+              (group [(? :name) :phono:fileType (? :fileType)]))
+    '(! (bound ?fileType)))))
+
+
+
 ;;;;;;;;
 (defmulti control (fn [state op] op))
 
