@@ -18,28 +18,35 @@
 (defn update-dataset [dataset s]
   (UpdateAction/parseExecute s dataset))
 
-(defn futz [ri]
-  (cond (.isLiteral ri) (.asLiteral ri)
+(defmulti convert-literal (fn [l] (.getDatatypeURI l)))
+(defmethod convert-literal "http://www.w3.org/2001/XMLSchema#boolean" [l]
+  (.getBoolean l))
+(defmethod convert-literal "http://www.w3.org/2001/XMLSchema#integer" [l]
+  (.getLong l))
+(defmethod convert-literal "http://www.w3.org/2001/XMLSchema#string" [l]
+  (.getString l))
+(defmethod convert-literal :default [l] l)
+
+(defn- convert-resource [ri]
+  (cond (.isLiteral ri) (convert-literal (.asLiteral ri))
         (.isURIResource ri) (URI. (.getURI (.asResource ri)))
         (.isResource ri) (.asResource ri)
         :else ri))
 
-
-(defn collect-results [rs]
-  (when (.hasNext rs)
-    (let [sol (.next rs)
-          names (iterator-seq (.varNames sol))]
-      (conj (or (collect-results rs) [])
-            (reduce (fn [m n] (assoc m n (futz (.get sol n))))
-                    {}
-                    names)))))
+(defn- convert-result [sol]
+  (let [names (iterator-seq (.varNames sol))]
+    (reduce (fn [m n] (assoc m n (convert-resource (.get sol n))))
+            {}
+            names)))
 
 (defn select-from-dataset [dataset s]
   (let [q (QueryFactory/create s)
         m (.getDefaultModel dataset)
         qe (QueryExecutionFactory/create q m)]
     (try (let [rs (.execSelect qe)]
-           (doall (collect-results rs))))))
+           (doall (map convert-result (iterator-seq rs))))
+         (finally (.close qe)))))
+
 
 
 ;;;;;;;;
