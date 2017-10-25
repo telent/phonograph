@@ -10,12 +10,10 @@
            (java.net URI)
            (org.apache.jena.rdf.model Model)
            (org.apache.jena.tdb TDBFactory)
-           (org.apache.jena.update UpdateAction)
-           #_ (org.apache.jena.fuseki.embedded FusekiServer)))
+           (org.apache.jena.update UpdateAction)))
 
 (defn- graph-size-in [ds]
   (.size (.getGraph (.getDefaultModel ds))))
-
 
 (defn update-dataset [dataset s]
   (UpdateAction/parseExecute s dataset))
