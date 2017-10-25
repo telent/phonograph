@@ -21,6 +21,7 @@
                  [org.omcljs/om "1.0.0-alpha47"]
                  [ring "1.6.0-beta6"  :exclusions [org.clojure/java.classpath]]
                  [sablono "0.7.6"]
+                 [telent/speckled "0.1.0-SNAPSHOT"]
                  [weasel "0.7.0" :exclusions [org.clojure/clojurescript]]
                  ])
 

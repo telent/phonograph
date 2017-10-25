@@ -1,5 +1,7 @@
 (ns phonograph.db
-  (:require [clojure.java.io :as io])
+  (:require [clojure.java.io :as io]
+            [speckled.dsl :as speckled :refer :all]
+            [speckled.rdf :as rdf :refer [u]])
   (:import (org.apache.jena.query
             DatasetFactory Dataset
             QueryExecution
@@ -47,6 +49,20 @@
            (doall (map convert-result (iterator-seq rs))))
          (finally (.close qe)))))
 
+(defn query [dataset q]
+  (binding [rdf/prefixes (assoc rdf/prefixes
+                                "phono" "http://phono.telent.net/rdf#")]
+    (let [s (->string q)]
+      (println s)
+      (select-from-dataset dataset s))))
+
+(defn update [dataset q]
+  (binding [rdf/prefixes (assoc rdf/prefixes
+                                "phono" "http://phono.telent.net/rdf#")]
+    (let [s (->string q)]
+      (UpdateAction/parseExecute s dataset))))
+
+;;;;;;;;
 
 
 ;;;;;;;;
