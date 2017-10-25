@@ -11,13 +11,7 @@
            (org.apache.jena.update UpdateAction)
            #_ (org.apache.jena.fuseki.embedded FusekiServer)))
 
-(defn open-dataset []
-  (let [dir (System/getProperty "user.dir")]
-    (TDBFactory/createDataset (.toString (io/file dir "db")))))
-
-(def ds (atom nil))
-
-(defn graph-size-in [ds]
+(defn- graph-size-in [ds]
   (.size (.getGraph (.getDefaultModel ds))))
 
 
@@ -48,13 +42,14 @@
            (doall (collect-results rs))))))
 
 
-(reset! ds (open-dataset))
+;;;;;;;;
+(defmulti control (fn [state op] op))
 
+(defmethod control :start [state op]
+  (let [ds (TDBFactory/createDataset (:tdb-location state))]
+    (assoc state :dataset ds)))
 
-#_
-(defn open-server [ds]
-  (doto
-      (-> (FusekiServer/create)
-          (.add "/rdf" ds)
-          .build)
-    (.start)))
+(defmethod control :stop [state op]
+  (let [ds (get state :dataset)]
+    (.close ds)
+    (dissoc state :dataset)))
