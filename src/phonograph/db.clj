@@ -49,13 +49,15 @@
 
 (defn query [dataset q]
   (binding [rdf/prefixes (assoc rdf/prefixes
+                                "tags" "http://phono.telent.net/tags#"
                                 "phono" "http://phono.telent.net/rdf#")]
     (let [s (->string q)]
-      (println s)
+;      (println s)
       (select-from-dataset dataset s))))
 
 (defn update [dataset q]
   (binding [rdf/prefixes (assoc rdf/prefixes
+                                "tags" "http://phono.telent.net/tags#"
                                 "phono" "http://phono.telent.net/rdf#")]
     (let [s (->string q)]
       (UpdateAction/parseExecute s dataset))))
@@ -101,7 +103,7 @@
    ds
    (filter-solns
     (optional (group [(? :name) :phono:digest (? :sha)])
-              (group [(? :name) :phono:fileType (? :fileType)]))
+              (group [(? :sha) :phono:fileType (? :fileType)]))
     '(! (bound ?fileType)))))
 
 

@@ -1,5 +1,6 @@
 (ns phonograph.fs
-  (:require [phonograph.db :as db]
+  (:require [green-tags.core :as tags]
+            [phonograph.db :as db]
             [phonograph.sha256 :as sha256]
             [clojure.java.io :as io]))
 
@@ -26,3 +27,23 @@
           (filter #(> (:last-modified %) last-scan-time)
                   (get-directory-entries name)))
     (db/set-file-scanned-timestamp ds name next-scan-time)))
+
+
+(defn tag-file [ds entry]
+  (println entry)
+  (let [file (io/file (get entry "name"))
+        subject (get entry "sha")
+        tags (dissoc
+              (try (tags/get-all-info file)
+                   (catch org.jaudiotagger.audio.exceptions.CannotReadException e {}))
+              :artwork-data)
+        triples (map (fn [[n v]] [subject (keyword (str "tags:" (name n))) v])
+                     tags )]
+    (db/update ds (speckled.dsl/insert
+                   (apply speckled.dsl/group
+                          [subject :phono:fileType (:format tags "unknown")]
+                          triples))))))
+
+(defn tag-untagged-files [ds]
+  (map (partial tag-file ds)
+       (db/get-files-without-tags ds)))
