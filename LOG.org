@@ -1,0 +1,195 @@
+[2017-10-23 Mon]
+
+Initial setup, of which there seems to be far too much.
+
+If we can issue sparql queries directly from java (ARQ), do we really
+need embedded fuseki?  The dependencies it adds are legion.
+
+Approximately this how we think it's going to work
+
+* scan media folders, read tags, generate triples
+* overlay semantics onto the tags   
+
+(id3 'foo' means 'composer' as does flac 'quux')
+
+* federate so we can lookup background information from other places
+
+* UI can talk to it with sparql(?) or maybe a simple interface.   
+
+Will speckled run in js? Is that a silly idea?
+
+* UI is not completely shit
+
+** find music, play music
+** find duplicate files
+** find files which are same track in different formats
+** put music in managed folders
+
+* paid subscribers can access their music over the internet
+
+They're paying for a proxy, basically.
+
+[2017-10-24 Tue]
+
+We are reading and writing the tdb using sparql: looking good so far
+
+How do we cope with staying up to date?  We can use dirwatch for files
+created while we're running, but we need some way to know if our
+index is out of date when we start.
+
+For each file we index, store name and last-modified
+on start, check each file modified more recently than the index
+and scan each directory modified more recently than the index
+(this means storing last-mod dates for directories as well as
+files). Or perhaps we don't need all that complexity and we can just
+keep the last-known change time and reindex every newer file/folder
+if the root time has changed
+
+
+<file:///srv/media/Music/> phon:lastModified "2017-12-12T0:0:0Z"^^xsd:dateTime .
+<file:///srv/media/Music/> a phon:Folder .
+<file:///srv/media/Music/myfile.ogg> phon:digest <sha256:e234235> .
+<file:///srv/media/Music/myfile.ogg> phon:inFolder <file:///srv/media/Music/>.
+<file:///srv/media/Music/yourfile.flac> phon:digest <sha256:a8f88990> .
+<file:///srv/media/Music/yourfile.flac> phon:inFolder <file:///srv/media/Music/>.
+
+
+<sha256:e234235> a phon:MP3 .
+<sha256:e234235> id3:TALB "Greatest Hits" .
+<sha256:e234235> id3:TOPE "Queen" .
+
+If a file is touched, check its digest
+If its digest has changed, remove old phon:digest triple and replace
+
+If a directory has changed, this means any file in it may have been
+added or removed.
+ - check folder for files that don't have a phon:digest, add them
+ - check db for files in this folder, remove phon:digest if not on the disk
+
+is there some better way to do this?  we could throw away all
+phon:digest if the store has in any way changed, then rescan them all?
+
+when done, for each digest that does not have a rdf:type, find its
+pathname and scan it and read the tags
+
+
+(aside: if we're keeping filesystem paths in the triplestore we should
+be careful about who we let query it.  Maybe we can put these triples
+in a separate graph, or maybe we can expose only the part of the path
+inside the 'store' directory, though if we're going to configure the
+app in the triplestore then we still need to keep the store path
+folder names there anyway)
+
+ 
+
+[2017-10-25 Wed]
+
+We can scan a folder and get all the sha256.  Next step is to 
+find all the sha256 for which there are no tags (will involve adding
+filters to speckled) 
+
+(select [(? :name) (? :sha)]
+ (filter
+   (optional (group [(? :name) phono:digest (? :sha)])
+             (group [(? :name) :rdf:type (? :type)]))
+   (not (bound (? :type)))))
+
+then we can run tagging on those files
+
+[2017-10-26 Thu]
+
+Just to show we can:
+
+=> (io/file (get (first (db/get-files-without-tags @ds)) "name")) 
+#object[java.io.File 0x13e62535 "/home/dan/Music/RUN-DMC/Best Of/13 - Beats to the Rhyme.mp3"]
+
+[2017-10-26 Thu]
+
+phonograph.user=> (phonograph.fs/visit-folder (-> app deref :db :dataset)   "/home/dan/Music")
+
+phonograph.user=> (phonograph.fs/tag-untagged-files (-> app deref :db :dataset)) 
+
+et walla
+
+[2017-10-28 Sat]
+
+* add a component that does a scan (^ above) on :start, then
+installs a directory watcher, then closes the watcher at :stop
+
+* add an http server that responds to sparql queries
+
+* port speckled to cljs
+
+* write a ui, which might be a bit like sledge
+
+[2017-11-01 Wed]
+
+Thinking about the next generation of rdf query language, which we're
+going to call triql (TRIple Query Language)
+ 
+[ triqlure? ]
+
+Fundamentally we have :
+
+- set of rdf triples, which establish facts about things.  An RDF
+  dataset is such a set, as is the argument to an "INSERT DATA" or the
+  result of evaluating a CONSTRUCT query
+
+- pattern: a set of rdf triples in which some of the values are
+  unknown ("variables"), or a number of such sets combined with the 
+  UNION, OPTIONAL etc operations
+
+- a "solve" operation which accepts a pattern and a dataset and finds 
+  all the potential values of the unknown variables
+
+- a variable value set, whoch may have been created by applying
+  "solve", or by "inline data" or maybe by BIND, and may be modified
+  using PROJECT
+
+- a "construct" operation which makes new triples, potentially making
+  use of values found by solving a pattern
+
+- some formalism for updating the datastore by adding/removing
+  constructed triples
+
+
+
+ I don't think we can nest these recursively, because  a CONSTRUCT is
+ only capable of generating ground triples, not a template.  What if
+ we wanted to construct some triples and then do another search on
+ them? Apparently sparl syntax does not allow this but it is
+ theoretically possible by arsing around with the form of the query
+https://ora.ox.ac.uk/objects/uuid:8b6f21d0-70c6-41fc-a6c5-fb77ac157529/datastreams/bine2a034c3-9e25-4a3b-a09c-a055c619a161
+
+solve produces a seq of values, as does VALUES.  BIND and PROJECT are
+ways to add/remove values from each element of that seq
+
+need good name for a seq-of-values-sets
+
+[2017-11-06 Mon]
+
+It is important to remember that "solve" does not mean "actually send
+to the backend and get a set of variable values back", it just means
+"if you *did* send this to the backend that's what you'd get".  Before
+we send to backend we might ask that the solution seq members be
+reordered or augmented or the set be truncated or ... or even that new
+triples be synthesized.
+
+[2017-11-06 Mon]
+
+Some guidelines for triql
+
+- stop trying to use s/conformer for coercing stuff to canonical form:
+  alex miller seems to think it's not a good idea
+
+- spec and protocols don't mix well. in general, good style is
+  apparently to put wrapper fns around protocols anyway, so don't use
+  them anywhere maps would be clearer
+
+- try to do all conversions when creating the query structure, don't
+  leave them until we have to process it
+
+
+
+
+
