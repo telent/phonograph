@@ -3,23 +3,16 @@
   (:require [clojure.spec.alpha :as s]))
 
 (s/def ::uri uri?)
+(defn u [loc] (URI. loc))
 
 (deftype Variable [name])
 (defn ? [n] (->Variable n))
 (s/def ::variable-ref (partial instance? Variable))
 
-(defmulti encode-literal class)
-(defmethod encode-literal String [s]
-  {:value s :datatype "http://www.w3.org/2001/XMLSchema#string"})
-
-(defmethod encode-literal Long [s]
-  {:value s :datatype "http://www.w3.org/2001/XMLSchema#integer"})
-
-(defmethod encode-literal :default [s]
-  (do ::s/invalid))
-
-(s/def ::literal (s/conformer encode-literal))
-
+(defmulti validate-literal class)
+(s/def ::literal (s/multi-spec validate-literal (fn [v s] v)))
+(defmethod validate-literal String [_] string?)
+(defmethod validate-literal Long [_] integer?)
 
 (s/def ::triple-subject (s/or ::uri ::uri
                               ::variable-ref ::variable-ref))
@@ -33,6 +26,7 @@
                          ::triple-predicate
                          ::triple-object))
 
+
 (s/def ::triples (s/coll-of ::triple))
 
 (s/def ::group (s/keys :req [::triples]))
@@ -41,6 +35,11 @@
 
 (defn group [& triples]
   {::triples triples})
+
+(s/def ::solution-seq (s/keys :req [::pattern]))
+(defn solve [p] {::pattern p})
+
+
 
 #_
 (s/conform ::group (group [(URI. "http://w.com")
